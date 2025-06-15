@@ -65,7 +65,7 @@ sequenceDiagram
 
 ## コンテナイメージのビルド
 
-以下のコマンドでコンテナイメージをビルドします。
+次のコマンドでコンテナイメージをビルドします。
 
 ```bash
 docker build -t simple-notification-bridge .
@@ -86,13 +86,11 @@ docker build -t simple-notification-bridge .
 devcontainerのコンテナーIDを調べて、ネットワークスタックを共有させてWebアプリを起動します。
 
 ```bash
-docker run -d --network container:65cab0ec78dd simple-notification-bridge
+docker run -d --network container:<コンテナーID> simple-notification-bridge
 ```
 
 http://localhost:8000 をWebブラウザで開きます。
 
-次のようなコマンドでClaude Codeを実行します。
+作業が完了すると通知を行うよう`CLAUDE.md`へ通知ルールを記載します。
 
-```bash
-claude -p "◯◯を実装してください。作業が完了したら curl localhost:8000 -XPOST を実行してください。"
-```
+以上で Claude Code が作業を完了すると通知されます。
