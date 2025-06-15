@@ -1,0 +1,6 @@
+.devcontainer
+.git
+.gitignore
+.ruff_cache
+.venv
+.vscode
