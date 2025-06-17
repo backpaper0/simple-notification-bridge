@@ -86,7 +86,7 @@ docker build -t simple-notification-bridge .
 devcontainerのコンテナーIDを調べて、ネットワークスタックを共有させてWebアプリを起動します。
 
 ```bash
-docker run -d --network container:<コンテナーID> simple-notification-bridge
+docker run -d --network container:<コンテナーID> --name snb --env-file .env simple-notification-bridge
 ```
 
 http://localhost:8000 をWebブラウザで開きます。
