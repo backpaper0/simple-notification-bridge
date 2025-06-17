@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from linebot.v3.messaging import (
     ApiClient,
@@ -90,7 +90,7 @@ async def get_index():
 
 
 @app.get("/notifications")
-async def get_notifications(request: Request):
+async def get_notifications():
     async def event_generator():
         async for notification in notification_manager.add_client():
             yield {
