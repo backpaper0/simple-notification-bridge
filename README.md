@@ -63,14 +63,6 @@ sequenceDiagram
 - 設定する値は次の通り
   - 通知のタイトル
 
-## コンテナイメージのビルド
-
-次のコマンドでコンテナイメージをビルドします。
-
-```bash
-docker build -t simple-notification-bridge .
-```
-
 ## devcontainer で Claude Code を動かす場合の使い方
 
 `.devcontainer/devcontainer.json`へポート公開の設定を追加します。
@@ -86,7 +78,7 @@ docker build -t simple-notification-bridge .
 devcontainerのコンテナーIDを調べて、ネットワークスタックを共有させてWebアプリを起動します。
 
 ```bash
-docker run -d --network container:<コンテナーID> --name snb --env-file .env simple-notification-bridge
+docker run -d --network container:<コンテナーID> --name snb --env-file .env ghcr.io/backpaper0/simple-notification-bridge:latest
 ```
 
 http://localhost:8000 をWebブラウザで開きます。
