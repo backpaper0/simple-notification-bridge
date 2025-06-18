@@ -7,7 +7,7 @@
 作業が完了したら次のコマンドを実行して通知してください。
 
 ```
-curl -XPOST http://localhost:8000/notify -d message="作業が完了しました。作業内容：{作業内容}"
+curl -XPOST http://localhost:8000/notify --json '{"message":"作業が完了しました。作業内容：{作業内容}"}'
 ```
 
 `{作業内容}`には実施した作業の概要を記載してください。
