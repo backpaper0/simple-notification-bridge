@@ -5,3 +5,11 @@
 .venv
 .vscode
 .env
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.coverage
+README.md
+CLAUDE.md

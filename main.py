@@ -1,117 +1,36 @@
-import asyncio
-from contextlib import asynccontextmanager
-from datetime import datetime
-from typing import AsyncGenerator
+import os
+from pathlib import Path
+import time
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
-from linebot.v3.messaging import (
-    ApiClient,
-    Configuration,
-    Message,
-    MessagingApi,
-    PushMessageRequest,
-)
-from pydantic import BaseModel
-from pydantic_settings import BaseSettings
-from sse_starlette.sse import EventSourceResponse
+import requests
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    notification_title: str = "DevContainer Notification"
-    server_host: str = "0.0.0.0"
-    server_port: int = 8000
-    line_channel_access_token: str | None = None
-    line_push_to: str | None = None
-
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+    )
+    discord_webhook_url: str
+    event_log: str
 
 
-class NotificationRequest(BaseModel):
-    message: str
+settings = Settings()  # type: ignore
 
 
-class NotificationManager:
-    def __init__(self):
-        self.clients: list[asyncio.Queue] = []
-
-    async def add_client(self) -> AsyncGenerator[dict, None]:
-        queue: asyncio.Queue = asyncio.Queue()
-        self.clients.append(queue)
-        try:
-            while True:
-                data = await queue.get()
-                yield data
-        finally:
-            self.clients.remove(queue)
-
-    async def notify_all(self, message: str):
-        notification_data = {
-            "message": message,
-            "timestamp": datetime.now().isoformat(),
-        }
-
-        for client in self.clients:
-            await client.put(notification_data)
-
-        if settings.line_push_to is not None:
-            configuration = Configuration(
-                access_token=settings.line_channel_access_token
-            )
-            with ApiClient(configuration) as api_client:
-                messaging_api = MessagingApi(api_client)
-                messaging_api.push_message(
-                    PushMessageRequest(
-                        to=settings.line_push_to,
-                        messages=[Message.from_dict({"type": "text", "text": message})],
-                        notificationDisabled=None,
-                        customAggregationUnits=None,
-                    )
-                )
-
-
-notification_manager = NotificationManager()
-settings = Settings()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    yield
-
-
-app = FastAPI(lifespan=lifespan)
-
-
-@app.get("/")
-@app.get("/index.html")
-async def get_index():
-    return FileResponse("index.html")
-
-
-@app.get("/notifications")
-async def get_notifications():
-    async def event_generator():
-        async for notification in notification_manager.add_client():
-            yield {
-                "event": "message",
-                "data": notification["message"],
-            }
-
-    return EventSourceResponse(event_generator())
-
-
-@app.post("/notify")
-async def post_notify(
-    notification: NotificationRequest = NotificationRequest(
-        message=settings.notification_title
-    ),
-):
-    await notification_manager.notify_all(notification.message)
-    return {"status": "ok", "message": "Notification sent"}
+def main() -> None:
+    event_log = Path(settings.event_log)
+    if not event_log.exists():
+        event_log.touch()
+    with event_log.open(mode="r", encoding="utf-8") as f:
+        f.seek(0, os.SEEK_END)
+        while True:
+            line = f.readline()
+            if not line:
+                time.sleep(0.1)
+                continue
+            resp = requests.post(settings.discord_webhook_url, json={"content": line})
+            print(resp)
 
 
 if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host=settings.server_host, port=settings.server_port)
+    main()

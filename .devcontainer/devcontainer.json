@@ -3,8 +3,7 @@
   "image": "claude-code",
   "runArgs": [
     "--cap-add=NET_ADMIN",
-    "--cap-add=NET_RAW",
-    "--publish=8000:8000"
+    "--cap-add=NET_RAW"
   ],
   "customizations": {
     "vscode": {

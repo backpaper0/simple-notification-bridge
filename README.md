@@ -2,8 +2,8 @@
 
 ## 概要
 
-ローカルホスト内で通知を行うための簡易的な仕組みを提供する Web アプリケーションです。
-主なユースケースは devcontainer 内で実行したタスクが完了したときに通知することです。
+ログファイルを監視して Discord に通知を送るシンプルなアプリケーションです。
+主なユースケースは devcontainer 内で実行したタスクが完了したときに Discord に通知することです。
 
 ## アーキテクチャ
 
@@ -11,78 +11,85 @@
 
 ```mermaid
 flowchart LR
-    subgraph DockerNetwork[Docker（ネットワークスタックを共有）]
-        WebApp[Webアプリ]
-        DevContainer[VSCode DevContainer]
+    subgraph Container[Docker Container]
+        App[Notification Bridge]
+        LogFile[events.log]
     end
 
-    subgraph Host[ホスト]
-        Browser[Webブラウザ<br>（SSEクライアント）]
+    subgraph External[External Services]
+        Discord[Discord Webhook]
     end
 
-    DevContainer -->|POST /notify| WebApp
-    Browser -->|GET /notifications<br>（SSE接続）| WebApp
-    WebApp -->|SSEでイベント送信| Browser
+    LogFile -->|tail -f| App
+    App -->|POST webhook| Discord
 ```
 
-通知の処理シーケンス。
-
-```mermaid
-sequenceDiagram
-    participant DevContainer as VSCode DevContainer
-    participant WebApp as Webアプリ
-    participant Browser as Webブラウザ
-
-    DevContainer->>WebApp: POST /notify
-    WebApp->>WebApp: 通知イベント生成
-    WebApp-->>Browser: Server-Sent Events で通知イベントを送信
-    Browser->>Browser: Web Notifications APIで通知を表示
-```
-
-## Web アプリ
+## アプリケーション
 
 ### 技術スタック
 
 - Python
-- FastAPI
+- requests
 - pydantic-settings
 
-### エンドポイント
+### 機能
 
-- `GET /index.html`
-  - 画面を開くと Web Notifications API の権限設定を行い、`GET /notifications`を使用して Server-Sent Events の接続を確立する
-  - Server-Sent Events を通じて通知イベントを受け取ると Web Notifications API を用いて通知を行う
-- `POST /notify`
-  - 接続済みの Server-Sent Events セッションに対して通知イベントを送信する
-- `GET /notifications`
-  - Server-Sent Events の接続を確立する
+- ログファイル（events.log）をリアルタイムで監視
+- 新しい行が追加されると Discord Webhook に POST リクエストを送信
+- 設定は環境変数で管理
 
 ### 設定
 
-- 設定は`.env`ファイルで行う
-- 設定する値は次の通り
-  - 通知のタイトル
+`.env`ファイルで設定を行います：
 
-## devcontainer で Claude Code を動かす場合の使い方
-
-`.devcontainer/devcontainer.json`へポート公開の設定を追加します。
-
-```json
-{
-  "runArgs": [
-    "--publish=8000:8000"
-  ]
-}
+```env
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your-webhook-url
+EVENT_LOG=events.log
 ```
 
-devcontainerのコンテナーIDを調べて、ネットワークスタックを共有させてWebアプリを起動します。
+## 使い方
+
+### Docker を使用
 
 ```bash
-docker run -d --network container:<コンテナーID> --name snb --env-file .env ghcr.io/backpaper0/simple-notification-bridge:latest
+# イメージをビルド
+docker build -t simple-notification-bridge .
+
+# コンテナを起動
+docker run -d --name snb --env-file .env -v ./events.log:/app/events.log simple-notification-bridge
 ```
 
-http://localhost:8000 をWebブラウザで開きます。
+### 直接実行
 
-作業が完了すると通知を行うよう`CLAUDE.md`へ通知ルールを記載します。
+```bash
+# 依存関係をインストール
+uv sync
 
-以上で Claude Code が作業を完了すると通知されます。
+# アプリケーションを実行
+python main.py
+```
+
+### devcontainer で Claude Code を動かす場合
+
+Claude Code の [Stop hook](https://docs.anthropic.com/en/docs/claude-code/hooks#stop) を使用して `~/.claude/events.log` にログを書き込みます。
+
+Stop hook の設定例：
+
+```bash
+jq -r '"\(.)"' >> ~/.claude/events.log
+```
+
+Simple Notification Bridge は `claude-code-config` をマウントして `events.log` を監視します：
+
+```bash
+docker run -d --name snb -v claude-code-config:/.claude:ro --env-file .env ghcr.io/backpaper0/simple-notification-bridge:latest
+```
+
+`.env` ファイルで Webhook の URL とログファイルのパスを設定します：
+
+```env
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your-webhook-url
+EVENT_LOG=/.claude/events.log
+```
+
+Claude Code のタスクが完了すると Stop hook が実行され、Discord に通知が送信されます。
