@@ -2,74 +2,54 @@
 
 ## 概要
 
-ログファイルを監視して Discord に通知を送るシンプルなアプリケーションです。
-主なユースケースは devcontainer 内で実行したタスクが完了したときに Discord に通知することです。
+ファイルを監視して新しい書き込みを検知したらRedisへpublishするだけのシンプルなアプリケーションです。
+主なユースケースは devcontainer 内で実行したClaude Codeの処理が完了したときに通知やコミットなどの後続処理を行うことです。
 
 ## アーキテクチャ
 
 システム構成。
 
 ```mermaid
-flowchart LR
-    subgraph Container[Docker Container]
-        App[Notification Bridge]
-        LogFile[events.log]
+flowchart TB
+    subgraph "devcontainer"
+        CC[Claude Code]
+        SH[Stop Hook]
+        LOG[ログファイル]
     end
-
-    subgraph External[External Services]
-        Discord[Discord Webhook]
+    
+    subgraph "Docker Container 1"
+        PY1[Python App<br/>ファイル監視]
     end
-
-    LogFile -->|tail -f| App
-    App -->|POST webhook| Discord
-```
-
-## アプリケーション
-
-### 技術スタック
-
-- Python
-- requests
-- pydantic-settings
-
-### 機能
-
-- ログファイル（events.log）をリアルタイムで監視
-- 新しい行が追加されると Discord Webhook に POST リクエストを送信
-- 設定は環境変数で管理
-
-### 設定
-
-`.env`ファイルで設定を行います：
-
-```env
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your-webhook-url
-EVENT_LOG=events.log
+    
+    subgraph "Docker Container 2"
+        REDIS[(Redis)]
+    end
+    
+    PY2[Python App<br/>サブスクライバ]
+    DISCORD[Discord]
+    GIT[Gitリポジトリ]
+    
+    CC -->|処理完了| SH
+    SH -->|ログ書き出し| LOG
+    LOG -->|ファイル変更検知| PY1
+    PY1 -->|publish| REDIS
+    REDIS -->|subscribe| PY2
+    PY2 -->|通知| DISCORD
+    PY2 -->|commit| GIT
+    
+    style CC fill:#e1f5fe
+    style SH fill:#f3e5f5
+    style LOG fill:#fff3e0
+    style PY1 fill:#e8f5e8
+    style PY2 fill:#e8f5e8
+    style REDIS fill:#ffebee
+    style DISCORD fill:#e3f2fd
+    style GIT fill:#f1f8e9
 ```
 
 ## 使い方
 
-### Docker を使用
-
-```bash
-# イメージをビルド
-docker build -t simple-notification-bridge .
-
-# コンテナを起動
-docker run -d --name snb --env-file .env -v ./events.log:/app/events.log simple-notification-bridge
-```
-
-### 直接実行
-
-```bash
-# 依存関係をインストール
-uv sync
-
-# アプリケーションを実行
-python main.py
-```
-
-### devcontainer で Claude Code を動かす場合
+devcontainer で Claude Code を動かす場合を想定しています。
 
 Claude Code の [Stop hook](https://docs.anthropic.com/en/docs/claude-code/hooks#stop) を使用して `~/.claude/events.log` にログを書き込みます。
 
@@ -79,17 +59,22 @@ Stop hook の設定例：
 jq -r '"\(.)"' >> ~/.claude/events.log
 ```
 
+Redisを起動します。
+
+```bash
+docker run -d --name redis -p 16379:6379 redis
+```
+
 Simple Notification Bridge は `claude-code-config` をマウントして `events.log` を監視します：
 
 ```bash
-docker run -d --name snb -v claude-code-config:/.claude:ro --env-file .env ghcr.io/backpaper0/simple-notification-bridge:latest
+docker run -d --name snb --network container:redis -v claude-code-config:/.claude:ro ghcr.io/backpaper0/simple-notification-bridge:v3
 ```
 
-`.env` ファイルで Webhook の URL とログファイルのパスを設定します：
+Claude Code のタスクが完了すると Stop hook が実行され、Redisへメッセージがpublishされます。
 
-```env
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your-webhook-url
-EVENT_LOG=/.claude/events.log
+メッセージをsubscribeして通知やコミットを行いたい場合は`post_process.py`を動かしてください。
+
+```bash
+uv run post_process.py
 ```
-
-Claude Code のタスクが完了すると Stop hook が実行され、Discord に通知が送信されます。

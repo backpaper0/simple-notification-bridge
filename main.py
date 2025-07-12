@@ -1,8 +1,8 @@
 import os
-from pathlib import Path
 import time
+from pathlib import Path
 
-import requests
+import redis
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,14 +10,17 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
     )
-    discord_webhook_url: str
-    event_log: str
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    channel: str = "notification"
+    event_log: str = "/.claude/events.log"
 
 
 settings = Settings()  # type: ignore
 
 
 def main() -> None:
+    r = redis.Redis(host=settings.redis_host, port=settings.redis_port)
     event_log = Path(settings.event_log)
     if not event_log.exists():
         event_log.touch()
@@ -28,8 +31,7 @@ def main() -> None:
             if not line:
                 time.sleep(0.1)
                 continue
-            resp = requests.post(settings.discord_webhook_url, json={"content": line})
-            print(resp)
+            r.publish(settings.channel, line)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,6 @@ COPY pyproject.toml uv.lock ./
 RUN pip install uv && \
     uv pip install --system -r pyproject.toml
 
-COPY . .
+COPY main.py ./
 
 CMD ["python", "main.py"]

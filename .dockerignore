@@ -13,3 +13,5 @@ __pycache__
 .coverage
 README.md
 CLAUDE.md
+Dockerfile
+LICENSE
